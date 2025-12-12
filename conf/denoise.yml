@@ -1,0 +1,18 @@
+# Model weights
+codec_weights: "/path/to/dac_weights.pth"
+denoiser_ckpt: "/path/to/denoiser_checkpoint.pt"
+
+# Input and output directories
+input_dir: "/path/to/noisy_wavs"
+output_dir: "/path/to/denoised_wavs"
+
+# Denoiser parameters (default: Large)
+width: 768
+n_blocks: 8 
+
+# Medium model parameters
+# width: 512
+# n_blocks: 4
+
+
+device: "cpu"

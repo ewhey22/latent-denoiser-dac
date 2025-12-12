@@ -1,0 +1,12 @@
+descript-audio-codec==1.0.0
+descript-audiotools==0.7.2
+argbind==0.3.9
+einops==0.6.1
+numba==0.56.4
+numpy==1.21.6
+torch-pesq==0.1.2
+torch==1.13.1
+torchaudio==0.13.1
+scipy==1.7.3
+tensorboard==2.11.2
+tqdm==4.67.1
