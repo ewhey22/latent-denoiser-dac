@@ -1,7 +1,13 @@
 # Clean Before You Code: Denoising in Neural Audio Codec Continuous Latent Space
 
-Code from an MSc dissertation on speech denoising in neural audio codec latent space, using Descript Audio Codec (DAC).
+Code from my MSc dissertation on speech denoising in the neural audio codec latent space, using Descript Audio Codec (DAC).
+
+- Denoising is performed in the **pre-quantised codec latent space**, leveraging a pretrained DAC encoder that already provides speech compression and a task-relevant representation (computationally efficient).
+- To the best of my knowledge (as of Aug 2025), no prior work uses **adversarial (GAN) objectives** to train a denoiser that operates directly on a codec’s pre-quantised latents.
+- I show that **latent-only training** can produce effective denoising while keeping training **memory requirements low**.
+
 DAC: [descriptinc/descript-audio-codec](https://github.com/descriptinc/descript-audio-codec)
+
 
 ## What’s in this repo
 - Latent denoiser: `src/denoise_module.py`
@@ -42,7 +48,7 @@ Our (Large) denoising method compared with:
 
 ## Quickstart example: denoise a folder
 1) **Create a Python 3.7 environment and install dependencies (example uses `uv`)**
-(install uv (if needed): https://docs.astral.sh/uv/)
+- (install uv (if needed): https://docs.astral.sh/uv/)
 ```bash
 # create and activate a venv
 uv venv --python 3.7
@@ -63,7 +69,7 @@ uv pip install -r requirements.txt
 
 3) **Prepare a config file (example: `conf/denoise.yml`)**
 
-- Input WAVs must be 16 kHz; the script raises an error if sample rate differs.
+- Input WAVs must be 16 kHz; the script raises an error if sample rate differs
 
 4) **Run:**
 ```bash
