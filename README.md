@@ -2,7 +2,7 @@
 
 Code from my MSc dissertation on speech denoising in the neural audio codec latent space, using Descript Audio Codec (DAC).
 
-- Denoising is performed in the **pre-quantised codec latent space**, leveraging a pretrained DAC encoder that already provides speech compression and a task-relevant representation (computationally efficient).
+- Denoising is performed in the **pre-quantised codec latent space**, using a pretrained DAC encoder that already provides speech compression and a task-relevant representation (computationally efficient).
 - To the best of my knowledge (as of Aug 2025), no prior work uses **adversarial (GAN) objectives** to train a denoiser that operates directly on a codec’s pre-quantised latents.
 - I show that **latent-only training** can produce effective denoising while keeping training **memory requirements low**.
 
