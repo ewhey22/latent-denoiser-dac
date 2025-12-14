@@ -1,8 +1,5 @@
 .venv/
 dac_weights/
 denoiser_weights/
-
 src/__pycache__/
-
-
-/pytest
+experiments/
