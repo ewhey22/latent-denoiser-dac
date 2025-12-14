@@ -112,7 +112,7 @@ class DNSAudioDataset(Dataset):
             rir, _ = torchaudio.load(str(rir_path))
             rir = rir/torch.sqrt((rir**2).sum())
             noisy = fftconvolve(noisy, rir, mode="full")
-            noisy = torch.as_tensor(noisy[:, :clean.shape[-1]], dtype=clean.dtype)
+            noisy = torch.tensor(noisy[:, :clean.shape[-1]], dtype=clean.dtype)
         
         # loudness normalise
         rms_clean = clean.pow(2).mean(dim=-1, keepdim=True).sqrt()
