@@ -79,4 +79,4 @@ python src/denoise.py --config conf/denoise.yml
 Outputs are written to `output_dir` with the same filenames as the inputs.
 
 ## Training (research code)
-Training is included mainly for reproducibility.
+Training is included mainly for reproducibility and is not "turn key". 
