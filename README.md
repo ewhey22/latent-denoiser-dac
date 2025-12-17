@@ -79,28 +79,4 @@ python src/denoise.py --config conf/denoise.yml
 Outputs are written to `output_dir` with the same filenames as the inputs.
 
 ## Training (research code)
-Training is included mainly for reproducibility and is not “turn-key”.
-
-### Training data
-`src/train.py` uses `DNSAudioDataset` (`src/dataset.py`), which expects a dataset arranged as:
-
-```text
-<root_dir>/
-  clean/*.wav
-  noisy/*.wav
-  rir/*.wav    (optional; only if reverb augmentation is enabled)
-```
-
-Notes:
-- Clean/noisy files are paired by sorted filename order. Ensure matching filenames to avoid mis-pairs.
-- Audio must be 16 kHz.
-- Training uses fixed 3 s windows (see dataset class).
-
-Training updates the denoiser weights (codec weights are frozen).
-The config is set up for 3× NVIDIA V100 GPUs.
-
-```bash
-torchrun --nproc_per_node=3 src/train.py -c conf/train.yml
-```
-
-Checkpoints available upon request.
+Training is included mainly for reproducibility.
