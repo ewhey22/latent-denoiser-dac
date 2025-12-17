@@ -15,7 +15,7 @@ DAC: [descriptinc/descript-audio-codec](https://github.com/descriptinc/descript-
 - Inference script: `src/denoise.py` (denoise a folder of noisy WAVs)
 
 ## Example
-One example from the 2020 DNS test set illustrating denoising quality.
+One example from the [2020 DNS](https://arxiv.org/pdf/2005.13981) dev test set illustrating denoising quality.
 
 ### Clean
 ![Clean spectrogram](assets/babble_CLEAN.png)  
