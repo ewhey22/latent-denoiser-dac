@@ -15,7 +15,7 @@ DAC: [descriptinc/descript-audio-codec](https://github.com/descriptinc/descript-
 - Inference script: `src/denoise.py` (denoise a folder of noisy WAVs)
 
 ## Example
-One example from the 2020 DNS test set illustrating denoising quality.
+One example from the [2020 Deep Noise Suppression Challenge ](https://arxiv.org/pdf/2005.13981) dev test set illustrating denoising quality.
 
 ### Clean
 ![Clean spectrogram](assets/babble_CLEAN.png)  
@@ -79,28 +79,4 @@ python src/denoise.py --config conf/denoise.yml
 Outputs are written to `output_dir` with the same filenames as the inputs.
 
 ## Training (research code)
-Training is included mainly for reproducibility and is not “turn-key”.
-
-### Training data
-`src/train.py` uses `DNSAudioDataset` (`src/dataset.py`), which expects a dataset arranged as:
-
-```text
-<root_dir>/
-  clean/*.wav
-  noisy/*.wav
-  rir/*.wav    (optional; only if reverb augmentation is enabled)
-```
-
-Notes:
-- Clean/noisy files are paired by sorted filename order. Ensure matching filenames to avoid mis-pairs.
-- Audio must be 16 kHz.
-- Training uses fixed 3 s windows (see dataset class).
-
-Training updates the denoiser weights (codec weights are frozen).
-The config is set up for 3× NVIDIA V100 GPUs.
-
-```bash
-torchrun --nproc_per_node=3 src/train.py -c conf/train.yml
-```
-
-Checkpoints available upon request.
+Training is included mainly for reproducibility and is not "turn key". 
