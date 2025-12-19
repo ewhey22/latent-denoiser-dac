@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 import torchaudio
 from torch.utils.data import Dataset
+from torch.nn.functional import pad
 from scipy.signal import fftconvolve
 
 class DNSAudioDataset(Dataset):
@@ -34,7 +35,7 @@ class DNSAudioDataset(Dataset):
                 root_dir: str,
                 ext: str=".wav",
                 window_duration: float=3.0,
-                min_valid_frac: float=1.0,
+                min_valid_frac: float=0.8,
                 sample_rate: int=16000,
                 p_reverb: float=0.0,
                 seed: int=None,
@@ -139,6 +140,10 @@ class DNSAudioDataset(Dataset):
             g_lin = torch.pow(torch.tensor(10.0), g_db / 20.0)
             clean *= g_lin 
             noisy *= g_lin
+
+        # pad to window duration
+        clean = pad(clean, (0, self.win_samps - clean.size(1)))
+        noisy = pad(noisy, (0, self.win_samps - noisy.size(1)))
 
 
         return {

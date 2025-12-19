@@ -5,10 +5,12 @@ from typing import List
 import argparse
 import yaml
 import torch
-from torch import nn
+from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.tensorboard import SummaryWriter
-from audiotools.ml.accelerator import Accelerator
+import torch.distributed as dist
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 from denoise_module import Denoiser, Discriminator
 from dataset import DNSAudioDataset
@@ -17,8 +19,9 @@ from torch_pesq import PesqLoss
 from dac.model.dac import DAC
 
 # Training script for the latent-space denoiser. Relies on Descript Audio Codec
-# (DAC) latents as targets; see README for config examples.
+# (DAC) latents as targets. See conf/train.py for config examples.
 
+# Helper functions
 def parse_args():
     p = argparse.ArgumentParser(description="Train denoiser")
     p.add_argument("--config", "-c",
@@ -26,7 +29,6 @@ def parse_args():
         help="Path to YAML config file")
     return p.parse_args()
 
-# Linear warmup 
 def make_linear_warmup(warmup_steps):
     def lr_lambda(current_step):
         if current_step < warmup_steps:
@@ -34,11 +36,22 @@ def make_linear_warmup(warmup_steps):
         return 1.0
     return lr_lambda
 
+# DDP setup
+def ddp_is_on() -> bool:
+    return "RANK" in os.environ and "WORLD_SIZE" in os.environ # torchrun sets these
 
-def get_infinite_loader(dataloader):
-    while True:
-        for batch in dataloader:
-            yield batch
+def ddp_setup():
+    """
+    Assumes `torchrun` launch
+    """
+    dist.init_process_group(backend="nccl")  # NCCL for NVIDIA GPUs
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
+    return local_rank
+
+def ddp_cleanup():
+    if dist.is_initialized():
+        dist.destroy_process_group()
 
 
 @dataclass
@@ -61,9 +74,12 @@ class State:
     iteration: int
     writer: SummaryWriter
 
+    ddp: bool
+    local_rank: int
+    device: torch.device
 
-def load(accel: Accelerator,
-        codec_weights: str,
+
+def load(codec_weights: str,
         train_data: str,
         val_data: str,
         run_dir: str,
@@ -72,7 +88,6 @@ def load(accel: Accelerator,
     """
     Build models/optimizers, datasets, and optionally restore from a checkpoint.
 
-    accel: audiotools Accelerator instance (handles DDP/mixed precision).
     codec_weights: path to DAC weights (.pth with key 'state_dict').
     train_data/val_data: dataset root paths (see DNSAudioDataset).
     run_dir: output directory for checkpoints and TensorBoard.
@@ -87,9 +102,15 @@ def load(accel: Accelerator,
                 codebook_size = 1024,
                 codebook_dim = 8,
                 sample_rate = sample_rate)
-    if accel.local_rank == 0:
-        print(f"Path to codec weights:\n{codec_weights}")
+    
+    ## DDP setup
+    use_ddp = ddp_is_on()
+    local_rank = ddp_setup() if use_ddp else 0
+    device = torch.device(f"cuda:{local_rank}")
+    
     codec.load_state_dict(torch.load(codec_weights, weights_only=True)["state_dict"])
+    if local_rank == 0:
+        print(f"Path to codec weights:\n{codec_weights}")
     denoiser = Denoiser() 
     disc = Discriminator()
 
@@ -98,7 +119,7 @@ def load(accel: Accelerator,
     # then load the dictionary locally using torch.load(). 
     # From here, you can easily access the saved items by simply querying the dictionary as you would expect.
     if from_checkpoint is not None:
-        if accel.local_rank == 0:
+        if local_rank == 0:
             print(f"Loading from checkpoint {from_checkpoint}")
         checkpoint = torch.load(from_checkpoint, weights_only=False)
         denoiser.load_state_dict(checkpoint['denoiser_state_dict'])
@@ -107,19 +128,24 @@ def load(accel: Accelerator,
     else:
         iteration = 0
 
-    codec = accel.prepare_model(codec)
-    denoiser = accel.prepare_model(denoiser)
-    disc = accel.prepare_model(disc)
+    codec = codec.to(device).eval()
+    denoiser = denoiser.to(device).train()
+    disc = disc.to(device).train()
 
-    if accel.local_rank == 0:
+    if use_ddp:
+        codec = DDP(codec, device_ids=[local_rank], output_device=local_rank).eval()
+        denoiser = DDP(denoiser, device_ids=[local_rank], output_device=local_rank).train()
+        disc = DDP(disc, device_ids=[local_rank], output_device=local_rank).train()
+
+    if local_rank == 0:
         print(f"Codec:\n{codec}")
         print(f"Denoiser:\n{denoiser}")
         print(f"Discriminator:\n{disc}")
-    # Discriminator
+
+
     optimizer_d = torch.optim.AdamW(disc.parameters(),
                         lr=1e-4,
                         betas=(0.0, 0.9))
-    # Generator
     optimizer_g = torch.optim.AdamW(denoiser.parameters(),
                         lr=4e-4,
                         betas=(0.0, 0.9))
@@ -134,8 +160,8 @@ def load(accel: Accelerator,
     pesq_loss = PesqLoss(1.0, sample_rate=sample_rate) # For tensorboard, compute on full audio samples.
 
     # Datasets
-    traindata = DNSAudioDataset(train_data, p_reverb=0.0)
-    valdata = DNSAudioDataset(val_data, seed=42, max_clips=50, p_reverb=0.0)
+    traindata = DNSAudioDataset(train_data)
+    valdata = DNSAudioDataset(val_data, seed=42, max_clips=50)
 
     # Tensorboard
     writer = SummaryWriter(log_dir=run_dir+"tb")
@@ -154,14 +180,18 @@ def load(accel: Accelerator,
         valdata=valdata,
 
         writer=writer,
-        iteration=iteration
+        iteration=iteration,
+
+        ddp=use_ddp,
+        local_rank=local_rank,
+        device=device
     )
 
 lambdas = {"l1_loss": 10.0,
             "g_loss": 1.0,
             "feat_loss": 1.0}  
 
-def train_loop(batch, state, accel):
+def train_loop(batch, state):
     """
     One GAN iteration: update discriminator (hinge + R1) then generator
     (adv + feature matching + latent L1).
@@ -171,14 +201,13 @@ def train_loop(batch, state, accel):
     state.codec.eval()
     outputs = {}
 
-    clean = batch["clean"].to(accel.device)
-    noisy = batch["noisy"].to(accel.device)
+    clean = batch["clean"].to(state.device)
+    noisy = batch["noisy"].to(state.device)
     with torch.no_grad():
-        clean_latents = state.codec.module.encoder(clean)
-        noisy_latents = state.codec.module.encoder(noisy)
+        clean_latents = state.codec.encoder(clean)
+        noisy_latents = state.codec.encoder(noisy)
 
     # Discriminator
-    # with accel.autocast():
     fake = state.denoiser(noisy_latents).detach()
     d_fake_D = state.disc(fake, return_feats=False)
 
@@ -202,10 +231,10 @@ def train_loop(batch, state, accel):
     outputs["loss/r1"] = r1_term
 
     state.optimizer_d.zero_grad()
-    accel.backward(outputs["loss/d_loss"])
+    outputs["loss/d_loss"].backward()
 
     outputs["other/grad_norm_disc"] = clip_grad_norm_(state.disc.parameters(), max_norm=10)
-    accel.step(state.optimizer_d)
+    state.optimizer_d.step()
 
 
     # Generator update
@@ -227,14 +256,14 @@ def train_loop(batch, state, accel):
                                         )
                         
     state.optimizer_g.zero_grad()
-    accel.backward(outputs["loss/total_loss"])
+    outputs["loss/total_loss"].backward()
     outputs["other/grad_norm_denoise"] = clip_grad_norm_(state.denoiser.parameters(), max_norm=10)
-    accel.step(state.optimizer_g)
+    state.optimizer_g.step()
     for p in state.disc.parameters():
         p.requires_grad = True
 
     # Logging
-    if state.iteration % 10 == 0:
+    if state.iteration % 10 == 0 and state.local_rank == 0:
         for tag, value in outputs.items():
             state.writer.add_scalar(tag, value, global_step=state.iteration)
         state.writer.add_scalar("other/lr_denoise", state.optimizer_g.param_groups[0]['lr'], global_step=state.iteration)
@@ -242,56 +271,62 @@ def train_loop(batch, state, accel):
 
 
 @torch.no_grad()
-def val_loop(batch, state, accel):
+def val_loop(batch, state):
     """Compute L1 in latent space for a validation batch."""
     state.codec.eval()
     state.denoiser.eval()
 
-    clean = batch["clean"].to(accel.device)
-    noisy = batch["noisy"].to(accel.device)
+    clean = batch["clean"].to(state.device)
+    noisy = batch["noisy"].to(state.device)
 
-    clean_latents = state.codec.module.encoder(clean)
-    noisy_latents = state.codec.module.encoder(noisy)
+    clean_latents = state.codec.encoder(clean)
+    noisy_latents = state.codec.encoder(noisy)
     g_out = state.denoiser(noisy_latents)
     return state.l1_loss(g_out, clean_latents)
     
 
 @torch.no_grad()
-def save_samples(state, accel, idxs):
-    """Log noisy/clean/recon audio and PESQ to TensorBoard for given indices."""
+def save_samples(state, idxs):
+    """Log noisy/clean/recon audio samples and PESQ to TensorBoard for given indices."""
     state.codec.eval()
     state.denoiser.eval()
 
-    batch = [state.valdata[idx*10] for idx in idxs]
+    batch = [state.valdata[idx] for idx in idxs]
     batch = torch.utils.data.default_collate(batch)
 
-    clean = batch["clean"].to(accel.device)
-    noisy = batch["noisy"].to(accel.device)
+    clean = batch["clean"].to(state.device)
+    noisy = batch["noisy"].to(state.device)
 
-
-    noisy_latents = state.codec.module.encoder(noisy)
+    noisy_latents = state.codec.encoder(noisy)
     g_out = state.denoiser(noisy_latents)
-    z, _, _, _, _ = state.codec.module.quantizer(g_out)
-    recon = state.codec.module.decoder(z)
+    z, _, _, _, _ = state.codec.quantizer(g_out)
+    recon = state.codec.decoder(z)
+
+    # Align lengths for PESQ/logging (DAC decoder can introduce off-by-one)
+    target_len = min(clean.shape[-1], recon.shape[-1])
+    clean = clean[..., :target_len]
+    noisy = noisy[..., :target_len]
+    recon = recon[..., :target_len]
 
     pesq = state.pesq_loss.mos(clean.squeeze(1).cpu(), recon.squeeze(1).cpu())
 
     # Tensorboard
-    if state.iteration == 0:
-        for i, (n, c) in enumerate(zip(noisy, clean)):
-            state.writer.add_audio(f"noisy/audio_{i}", n, global_step=state.iteration, sample_rate=16000)
-            state.writer.add_audio(f"clean/audio_{i}", c, global_step=state.iteration, sample_rate=16000)
-            
-    for i, r in enumerate(recon):
-        state.writer.add_audio(f"recon/audio_{i}", r, global_step=state.iteration, sample_rate=16000)
-        state.writer.add_scalar(f"pesqmos/recon_{i}", pesq[i], global_step=state.iteration)
+    if state.local_rank == 0:
+        if state.iteration == 0:
+            for i, (n, c) in enumerate(zip(noisy, clean)):
+                state.writer.add_audio(f"noisy/audio_{i}", n, global_step=state.iteration, sample_rate=16000)
+                state.writer.add_audio(f"clean/audio_{i}", c, global_step=state.iteration, sample_rate=16000)
+                
+        for i, r in enumerate(recon):
+            state.writer.add_audio(f"recon/audio_{i}", r, global_step=state.iteration, sample_rate=16000)
+            state.writer.add_scalar(f"pesqmos/recon_{i}", pesq[i], global_step=state.iteration)
 
-def save_checkpoint(state, run_dir, accel, name):
+def save_checkpoint(state, run_dir, name):
     """Write a training checkpoint (denoiser/disc/opt/iteration)."""
     path = os.path.join(run_dir, name)
     tmp_path = path + ".tmp"
-    denoiser = accel.unwrap(state.denoiser)
-    disc = accel.unwrap(state.disc)
+    denoiser = state.denoiser.module if isinstance(state.denoiser, DDP) else state.denoiser
+    disc = state.disc.module if isinstance(state.disc, DDP) else state.disc
     torch.save({
         'denoiser_state_dict': denoiser.state_dict(),
         'optimizer_g_state_dict': state.optimizer_g.state_dict(),
@@ -303,8 +338,7 @@ def save_checkpoint(state, run_dir, accel, name):
         }, tmp_path)
     os.replace(tmp_path, path)
 
-def train(accel: Accelerator,
-          codec_weights: str,
+def train(codec_weights: str,
           train_data: str,
           val_data: str,
           run_dir: str,
@@ -317,70 +351,82 @@ def train(accel: Accelerator,
           samples_per: int=1000,
           save_ckpts: List[int]=[1000, 25000, 50000, 100000, 150000, 200000],
           val_idx: List[int]=[1, 3, 6, 8, 12]):
+
     os.makedirs(run_dir, exist_ok=True)
 
-    state = load(accel, 
-                 codec_weights=codec_weights,
+    state = load(codec_weights=codec_weights,
                  train_data=train_data,
                  val_data=val_data,
                  run_dir=run_dir,
                  from_checkpoint=from_checkpoint)
     
-    train_dataloader = accel.prepare_dataloader(state.traindata,
-                                                start_idx=state.iteration*train_batch,
-                                                num_workers=num_workers,
-                                                batch_size=train_batch,
-                                                shuffle=False)
-    
+    # Setup
+    if state.ddp:
+        train_sampler = DistributedSampler(state.traindata)
+    else:
+        train_sampler = None
     
 
-    val_dataloader = accel.prepare_dataloader(state.valdata,
-                                              start_idx=0,
-                                              num_workers=num_workers,
-                                              batch_size=val_batch,
-                                              shuffle=False)
+    train_dataloader = DataLoader(state.traindata, batch_size=train_batch,
+                                  sampler=train_sampler,
+                                  num_workers=num_workers,
+                                  shuffle=(train_sampler is None)
+                                  )
+    val_dataloader = DataLoader(state.valdata, batch_size=val_batch)
 
+    def get_infinite_loader(dataloader, sampler=None):
+        epoch = 0
+        while True:
+            if sampler is not None:
+                sampler.set_epoch(epoch)
+            for batch in dataloader:
+                yield batch
+            epoch += 1
+
+    # Start model training process
     best_val = float('inf')
-    with tqdm(total=total_iters, disable=(accel.local_rank != 0)) as pbar:
-        train_iter = get_infinite_loader(train_dataloader)
+    with tqdm(total=total_iters, disable=(state.local_rank != 0)) as pbar:
+        train_iter = get_infinite_loader(train_dataloader, train_sampler)
         while state.iteration < total_iters:
             
             #  Validation
-            if state.iteration == 0 or state.iteration % val_per == 0:
-                if accel.local_rank == 0:
-                    print("Doing validation")
+            if (state.iteration == 0 or state.iteration % val_per == 0) and state.local_rank == 0:
+                print("Doing validation")
                 total_l1 = 0
-                with tqdm(total=len(val_dataloader), disable=(accel.local_rank != 0)) as valbar:
+                with tqdm(total=len(val_dataloader), disable=(state.local_rank != 0)) as valbar:
                     for batch in val_dataloader:
-                        total_l1 += val_loop(batch, state, accel).item()
+                        total_l1 += val_loop(batch, state).item()
                         valbar.update(1)
                 avg_l1 = total_l1/len(val_dataloader)
                 state.writer.add_scalar("val_loss/l1", avg_l1, global_step=state.iteration)
-                if avg_l1 < best_val and accel.local_rank == 0:
+                if avg_l1 < best_val:
                     best_val = avg_l1
-                    save_checkpoint(state, run_dir=run_dir, accel=accel, name="best.tar")
+                    save_checkpoint(state, run_dir=run_dir, name="best.tar")
 
             # Save samples
-            if (state.iteration == 0 or state.iteration % samples_per == 0) and accel.local_rank == 0:
+            if (state.iteration == 0 or state.iteration % samples_per == 0) and state.local_rank == 0:
                 print("Saving samples")
-                save_samples(state, accel, val_idx)
+                save_samples(state, val_idx)
+            # Save 'latest' checkpoint
+            if state.iteration % 100 == 0 and state.local_rank == 0:
+                save_checkpoint(state, run_dir=run_dir, name="latest.tar")
+            # Save checkpoint every N iterations 
+            if state.iteration in save_ckpts and state.local_rank == 0:
+                save_checkpoint(state, run_dir=run_dir, name=f"{state.iteration}_ckpt.tar")
             
-            if state.iteration % 100 == 0 and accel.local_rank == 0:
-                save_checkpoint(state, run_dir=run_dir, accel=accel, name="latest.tar")
-                
-            if state.iteration in save_ckpts and accel.local_rank == 0:
-                save_checkpoint(state, run_dir=run_dir, accel=accel, name=f"{state.iteration}_ckpt.tar")
+            # Make other ranks wait while rank 0 is still validating
+            if state.ddp:
+                dist.barrier()
             
             batch = next(train_iter)
-            train_loop(batch, state, accel)
+            train_loop(batch, state)
             state.iteration += 1
             pbar.update(1)
+    
+    ddp_cleanup()
 
 
 if __name__ == "__main__":
     args = parse_args()
     cfg = yaml.safe_load(open(args.config))
-    with Accelerator() as accel:
-        if accel.local_rank != 0:
-            sys.tracebacklimit = 0
-        train(accel=accel, **cfg)
+    train(**cfg)
