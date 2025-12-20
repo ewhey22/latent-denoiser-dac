@@ -2,7 +2,7 @@ run_dir: "path/to/run/dir"
 codec_weights: "path/to/codec/weights"
 train_data: "/path/to/train/data"
 val_data: "path/to/val/data"
-# from_checkpoint: "/path/to/denoiser-checkpoint-L.tar"
+from_checkpoint: "/path/to/denoiser-checkpoint-L.tar"
 
 total_iters: 40000
 train_batch: 256
