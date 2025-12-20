@@ -1,6 +1,6 @@
 # Model weights
 codec_weights: "/path/to/dac_weights.pth"
-denoiser_ckpt: "/path/to/denoiser_checkpoint.pt"
+denoiser_ckpt: "/path/to/denoiser-checkpoint-L.tar"
 
 # Input and output directories
 input_dir: "/path/to/noisy_wavs"
