@@ -18,7 +18,7 @@ One example from the [2020 Deep Noise Suppression Challenge](https://arxiv.org/p
 
 #### Clean
 ![Clean spectrogram](assets/babble_CLEAN.png)  
-<audio src="[babble_clean.wav](https://github.com/user-attachments/files/24290789/babble_CLEAN.wav)" controls></audio>
+<audio src="(https://github.com/user-attachments/files/24290789/babble_CLEAN.wav)" controls></audio>
 
 #### Noisy (noise-added)
 ![Noisy spectrogram](assets/babble_NOISY.png)  
