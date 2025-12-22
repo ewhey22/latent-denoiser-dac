@@ -18,15 +18,15 @@ One example from the [2020 Deep Noise Suppression Challenge](https://arxiv.org/p
 
 #### Clean
 ![Clean spectrogram](assets/babble_CLEAN.png)  
-<audio src="https://raw.githubusercontent.com/ewhey22/latent-denoiser-dac/main/assets/babble_CLEAN.wav" controls></audio>
+<audio src="[babble_clean.wav](https://github.com/user-attachments/files/24290789/babble_CLEAN.wav)" controls></audio>
 
 #### Noisy (noise-added)
 ![Noisy spectrogram](assets/babble_NOISY.png)  
-<audio src="https://raw.githubusercontent.com/ewhey22/latent-denoiser-dac/main/assets/babble_NOISY.wav" controls></audio>
+<audio src="[babble_noisy.wav](https://github.com/user-attachments/files/24290790/babble_NOISY.wav)" controls></audio>
 
 #### Denoised (noise-removed)
 ![Denoised spectrogram](assets/babble_DENOISED.png)  
-<audio src="https://raw.githubusercontent.com/ewhey22/latent-denoiser-dac/main/assets/babble_DENOISED.wav" controls></audio>
+<audio src="[babble_denoised.wav](https://github.com/user-attachments/files/24290788/babble_DENOISED.wav)" controls></audio>
 
 ## Performance Evaluation
 [DNSMOS](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9746108) comparison against published results (and speaker similarity) on the DNS2020 dev test set. DNS scores from 1-5, and Speaker Similarity from 0-1.
