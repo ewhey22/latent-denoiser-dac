@@ -16,15 +16,15 @@ This repo contains the implementation from my MSc dissertation on speech denoisi
 ## Example
 One example from the [2020 Deep Noise Suppression Challenge](https://arxiv.org/pdf/2005.13981) dev test set illustrating denoising quality.
 
-#### Clean
+### Clean
 ![Clean spectrogram](assets/babble_CLEAN.png)
 [Download clean sample (WAV)](assets/babble_CLEAN.wav)
 
-#### Noisy (noise-added)
+### Noisy (noise-added)
 ![Noisy spectrogram](assets/babble_NOISY.png)
 [Download noisy sample (WAV)](assets/babble_NOISY.wav)
 
-#### Denoised (noise-removed)
+### Denoised (noise-removed)
 ![Denoised spectrogram](assets/babble_DENOISED.png)
 [Download denoised sample (WAV)](assets/babble_DENOISED.wav)
 
