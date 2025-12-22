@@ -17,17 +17,16 @@ This repo contains the implementation from my MSc dissertation on speech denoisi
 One example from the [2020 Deep Noise Suppression Challenge](https://arxiv.org/pdf/2005.13981) dev test set illustrating denoising quality.
 
 #### Clean
-![Clean spectrogram](assets/babble_CLEAN.png)  
-<video src="(https://github.com/user-attachments/files/24290789/babble_CLEAN.wav)" controls height="40"></video>
-<audio src="(https://github.com/user-attachments/files/24290789/babble_CLEAN.wav)" controls></audio>
+![Clean spectrogram](assets/babble_CLEAN.png)
+[Download clean sample (WAV)](assets/babble_CLEAN.wav)
 
 #### Noisy (noise-added)
-![Noisy spectrogram](assets/babble_NOISY.png)  
-<audio src="[babble_noisy.wav](https://github.com/user-attachments/files/24290790/babble_NOISY.wav)" controls></audio>
+![Noisy spectrogram](assets/babble_NOISY.png)
+[Download noisy sample (WAV)](assets/babble_NOISY.wav)
 
 #### Denoised (noise-removed)
-![Denoised spectrogram](assets/babble_DENOISED.png)  
-<audio src="[babble_denoised.wav](https://github.com/user-attachments/files/24290788/babble_DENOISED.wav)" controls></audio>
+![Denoised spectrogram](assets/babble_DENOISED.png)
+[Download denoised sample (WAV)](assets/babble_DENOISED.wav)
 
 ## Performance Evaluation
 [DNSMOS](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9746108) comparison against published results (and speaker similarity) on the DNS2020 dev test set. DNS scores from 1-5, and Speaker Similarity from 0-1.
