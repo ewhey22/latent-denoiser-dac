@@ -4,7 +4,7 @@ This repo contains the implementation from my MSc dissertation on speech denoisi
 
 - **Latent-space Speech Denoiser:** Operates on **pre-quantised Descript Audio Codec (DAC) latents** at 16 kHz. Inference runs through a **encode —> denoise —> quantise —> decode** pipeline.
 - **Efficient Training:** The denoiser is trained with **adversarial losses** applied directly to encoder-generated latents, bypassing the need for full codec forward passes.
-- **Optimised Resource Usage:** ~20 hours wall-clock on 3× NVIDIA V100 GPUs (≈ 40k iterations).
+- **Training Cost:** Released checkpoint (Large denoiser) trained on ~20 hours wall-clock on 3× NVIDIA V100 GPUs (≈ 40k iterations).
 
 **Note**: This project relies on DAC: [descriptinc/descript-audio-codec](https://github.com/descriptinc/descript-audio-codec)
 
