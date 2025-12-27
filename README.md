@@ -29,7 +29,7 @@ One example from the [2020 Deep Noise Suppression Challenge](https://arxiv.org/p
 [Download denoised sample (WAV)](assets/babble_DENOISED.wav)
 
 ## Performance Evaluation
-[DNSMOS](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9746108) comparison against published results (and speaker similarity) on the DNS2020 dev test set. DNS scores from 1-5, and Speaker Similarity from 0-1.
+[DNSMOS](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9746108) comparison against published results (and speaker similarity) on the DNS2020 dev test set. DNSMOS scores from 1-5, and Speaker Similarity from 0-1.
 
 ![DNSMOS comparison](assets/DNSMOS_compare.png)
 
